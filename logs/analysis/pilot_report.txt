@@ -1,0 +1,80 @@
+================================================================
+  PILOT STUDY REPORT — HRC Assembly System Evaluation
+================================================================
+  Trials: 264   Participants: 7
+
+  [A_no_robot]  N = 0 trial(s)
+    — no data —
+
+  [B_no_context]  N = 71 trial(s)
+    ATCT:            186.1 s  (σ=39.6 s)
+    LLM calls/trial: 6.6  (σ=2.5)
+    VLM calls/trial: 6.8  (σ=4.3)
+    Total calls/trial:13.4  (σ=5.0)
+    VLM escalation:  47.3%  (σ=19.2%)
+    Exec score:      0.90  (σ=0.15)
+    LLM accuracy [Llama 4 Scout]:  65.4%  (n=81)
+    LLM accuracy [Qwen3 4B INT8]:  50.0%  (n=40)
+    VLM accuracy:    72.4%  (σ=13.8%)
+
+  [B_with_context]  N = 105 trial(s)
+    ATCT:            187.1 s  (σ=30.6 s)
+    LLM calls/trial: 6.2  (σ=2.8)
+    VLM calls/trial: 7.1  (σ=5.4)
+    Total calls/trial:13.3  (σ=6.5)
+    VLM escalation:  50.3%  (σ=20.3%)
+    Exec score:      0.98  (σ=0.07)
+    LLM accuracy [Llama 4 Scout]:  73.9%  (n=88)
+    LLM accuracy [Qwen3 4B INT8]:  69.5%  (n=82)
+    VLM accuracy:    72.8%  (σ=11.6%)
+
+  [C_with_filter]  N = 22 trial(s)
+    ATCT:            199.0 s  (σ=28.4 s)
+    LLM calls/trial: 7.1  (σ=1.3)
+    VLM calls/trial: 4.5  (σ=3.2)
+    Total calls/trial:11.6  (σ=3.6)
+    VLM escalation:  35.2%  (σ=15.0%)
+    Exec score:      1.00  (σ=0.00)
+    LLM accuracy [Llama 4 Scout]:  61.9%  (n=21)
+    LLM accuracy [Qwen3 4B INT8]:  57.1%  (n=7)
+    VLM accuracy:    75.1%  (σ=4.3%)
+
+  [C_with_filter_and_context]  N = 66 trial(s)
+    ATCT:            169.9 s  (σ=27.6 s)
+    LLM calls/trial: 5.3  (σ=1.9)
+    VLM calls/trial: 4.2  (σ=1.9)
+    Total calls/trial:9.5  (σ=1.9)
+    VLM escalation:  44.3%  (σ=14.8%)
+    Exec score:      1.00  (σ=0.00)
+    LLM accuracy [Llama 4 Scout]:  72.1%  (n=61)
+    LLM accuracy [Qwen3 4B INT8]:  80.0%  (n=10)
+    VLM accuracy:    72.9%  (σ=8.0%)
+
+  Per-call summary (all trials combined):
+    Total calls:       756
+    LLM calls:         391
+      [Llama 4 Scout]:  252 calls  accuracy=69.7%
+      [Qwen3 4B INT8]:  139 calls  accuracy=64.0%
+    VLM calls:         365
+    Annotated:         754 / 756
+    Overall accuracy:  69.9%
+
+  Per-step accuracy:
+    Step 1:  LLM=85%  (n=52)  VLM=89%  (n=38)
+    Step 2:  LLM=92%  (n=80)  VLM=79%  (n=33)
+    Step 3:  LLM=50%  (n=96)  VLM=61%  (n=67)
+    Step 4:  LLM=62%  (n=123)  VLM=51%  (n=39)
+    Step 5:  LLM=58%  (n=38)  VLM=57%  (n=75)
+
+  [Filter Analysis]
+    Trials with filter enabled: 88
+    Validation failures: LLM=156, VLM=121, Total=277
+    Hint convergence → valid: LLM=72, VLM=31
+    Hint convergence → none:  LLM=0, VLM=0
+    Dropped after hint:       LLM=72, VLM=54
+
+  Data quality notes:
+    • Condition A_no_robot: no data — pending collection
+    • fetch_time_s:        not yet logged in trial_logger.py
+    • execution_success_score: integer inputs auto-normalized ÷ N_STEPS
+================================================================
