@@ -1,0 +1,5 @@
+{
+    "semantic action": "assembly with carburetor_body and throttle_stop",
+    "Shared objects": ["screws","pliers"],
+    "Remote objects": ["diaphragm","screwdriver","cover","float_bowl","spring"]
+}
