@@ -1,0 +1,47 @@
+[
+    {
+        "step number": 1,
+        "step description": "Insert the diaphragm into the top chamber of the carburetor body.",
+        "objects_required": [
+            "diaphragm",
+            "carburetor_body"
+        ]
+    },
+    {
+        "step number": 2,
+        "step description": "Place the spring into the diaphragm inside the carburetor body.",
+        "objects_required": [
+            "spring",
+            "carburetor_body"
+        ]
+    },
+    {
+        "step number": 3,
+        "step description": "Position the cover over the spring on the top of the carburetor body and secure it with screws using a screwdriver.",
+        "objects_required": [
+            "cover",
+            "screw",
+            "screwdriver",
+            "carburetor_body"
+        ]
+    },
+    {
+        "step number": 4,
+        "step description": "Attach the float bowl to the bottom of the carburetor body and secure it using screws and a screwdriver.",
+        "objects_required": [
+            "float_bowl",
+            "screw",
+            "screwdriver",
+            "carburetor_body"
+        ]
+    },
+    {
+        "step number": 5,
+        "step description": "Install the throttle stop screw onto the side of the carburetor body using a screwdriver.",
+        "objects_required": [
+            "throttle_stop",
+            "screwdriver",
+            "carburetor_body"
+        ]
+    }
+]

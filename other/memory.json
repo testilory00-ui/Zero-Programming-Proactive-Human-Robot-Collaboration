@@ -1,0 +1,43 @@
+[  
+    {
+        "step number": 1,
+        "step description": "Place throttle stop on the side of the carburetor body and fix with screws",
+        "objects_required": [
+            "throttle_stop",
+            "screws",
+            "screwdriver"
+        ]
+    },
+    {
+        "step number": 2,
+        "step description": "Insert diaphragm into carburetor body",
+        "objects_required": [
+            "diaphragm"
+        ]
+    },
+    {
+        "step number": 3,
+        "step description": "Insert spring into carburetor body",
+        "objects_required": [
+            "spring"
+        ]
+    },
+    {
+        "step number": 4,
+        "step description": "Attach cover onto the carburetor body and fix with screws",
+        "objects_required": [
+            "screwdriver",
+            "cover",
+            "screws"
+        ]
+    },
+    {
+        "step number": 5,
+        "step description": "Mount float bowl on carburetor body and fix with screws",
+        "objects_required": [
+            "float_bowl",
+            "screws",
+            "screwdriver"
+        ]
+    }
+]
