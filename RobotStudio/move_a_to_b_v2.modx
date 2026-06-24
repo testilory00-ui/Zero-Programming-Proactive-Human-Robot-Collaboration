@@ -1,0 +1,85 @@
+MODULE move_a_to_b_v2
+    !
+    ! move_a_to_b_v2.modx
+    ! Simple A to B motion demo for ABB GoFa CRB 15000 / OmniCore / RobotWare 7.x
+    !
+    ! All positions use jointtargets (absolute joint angles) — guaranteed
+    ! reachable on any GoFa station, no "joint out of range" errors.
+    !
+    ! GoFa CRB15000 axis limits:
+    !   ax1: +-175deg   ax2: -85/+85deg   ax3: -90/+70deg
+    !   ax4: +-175deg   ax5: -120/+120deg  ax6: +-360deg
+    !
+    ! HOW TO USE:
+    !   1. Remove modules with conflicting main() (prova, pick_and_place)
+    !   2. Load this module: T_ROB1 right-click -> Load Module
+    !   3. RAPID tab -> Check Program -> 0 errors
+    !   4. Virtual FlexPendant -> Auto mode -> Motors ON
+    !   5. RAPID tab -> PP to Main -> Run
+    !   6. Watch robot swing left (A) then right (B) in the 3D viewport
+    !
+    ! TO TEACH YOUR OWN POINTS:
+    !   Home tab -> Jog Joint -> move robot to desired pose
+    !   Note the joint angles in the Jog panel -> replace values below
+    ! -------------------------------------------------------------------------
+
+    ! Tooldata: wrist center, no offset (equivalent to tool0)
+    ! PERS is mandatory for tooldata — never VAR or CONST
+    PERS tooldata sim_tool := [TRUE, [[0,0,0],[1,0,0,0]],
+                               [0.001,[0,0,0.001],[1,0,0,0],0,0,0]];
+
+    ! Home: upright pose, ax5=40deg avoids wrist singularity at ax5=0
+    CONST jointtarget jHome := [[0, -20, 20, 0, 40, 0],
+                                 [9E9,9E9,9E9,9E9,9E9,9E9]];
+
+    ! Point A: arm rotated LEFT (ax1 = -45deg)
+    ! You will see the robot swing to the left in the 3D view
+    CONST jointtarget jPointA := [[-45, -20, 20, 0, 40, 0],
+                                   [9E9,9E9,9E9,9E9,9E9,9E9]];
+
+    ! Point B: arm rotated RIGHT (ax1 = +45deg)
+    ! You will see the robot swing to the right in the 3D view
+    CONST jointtarget jPointB := [[45, -20, 20, 0, 40, 0],
+                                   [9E9,9E9,9E9,9E9,9E9,9E9]];
+
+    PROC main()
+
+        ! Allow any valid joint configuration (prevents ERR_CFGMOT)
+        ConfJ \Off;
+        ConfL \Off;
+
+        TPWrite "move_a_to_b_v2: starting";
+
+        ! Step 1: Home
+        ! MoveAbsJ: reaches exact joint angles from any starting pose
+        TPWrite "Step 1: Home";
+        MoveAbsJ jHome, v200, fine, sim_tool;
+        WaitRob \InPos;
+
+        ! Step 2: Point A — swing LEFT
+        ! fine = full stop so WaitRob \InPos works correctly
+        TPWrite "Step 2: Point A (left)";
+        MoveAbsJ jPointA, v200, fine, sim_tool;
+        WaitRob \InPos;
+        WaitTime 1.0;
+
+        ! Step 3: Point B — swing RIGHT
+        ! This is the core A to B motion
+        TPWrite "Step 3: Point B (right)";
+        MoveAbsJ jPointB, v200, fine, sim_tool;
+        WaitRob \InPos;
+        WaitTime 1.0;
+
+        ! Step 4: Return Home
+        TPWrite "Step 4: Home";
+        MoveAbsJ jHome, v200, fine, sim_tool;
+        WaitRob \InPos;
+
+        TPWrite "move_a_to_b_v2: complete";
+
+    ERROR
+        TPWrite "ERROR " + ValToStr(ERRNO);
+        TPWrite "If joint out of range: reduce ax1 angle in jPointA/jPointB";
+    ENDPROC
+
+ENDMODULE

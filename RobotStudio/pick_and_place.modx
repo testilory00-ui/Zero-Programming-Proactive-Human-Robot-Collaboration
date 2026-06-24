@@ -1,0 +1,470 @@
+MODULE tesi_Lorenzo
+
+    ! ═══════════════════════════════════════════════════════════════════════════
+    ! PICK-AND-PLACE MODULE — ABB GoFa CRB 15000 (OmniCore / RobotWare 7.x)
+    ! ═══════════════════════════════════════════════════════════════════════════
+    !
+    ! Receives batch commands from Python over TCP socket.
+    !
+    ! PROTOCOL:
+    !   Python → RAPID:
+    !     "GP_R1,GP_S1|GP_R2,GP_S2\n"   →  execute batch  →  "OK\n"
+    !     "HOME\n"                      →  move to HomePose →  "OK\n"
+    !     "DONE\n"                      →  close connection →  "BYE\n"
+    !
+    !   RAPID → Python:
+    !     "OK\n"                        →  batch / command success
+    !     "ERROR;<message>\n"           →  something went wrong
+    !     "BYE\n"                       →  shutdown acknowledged
+    !     "READY\n"                     →  server ready after connect
+    !
+    !   Batch format:  PICK_GP,PLACE_GP,z_offset | PICK_GP,PLACE_GP,z_offset | ...
+    !     - Pipe (|) separates commands within a batch.
+    !     - Comma (,) separates pick and place GP IDs.
+    !     - GP IDs use underscores: GP_R1, CTR_SCREW_S  (not hyphens).
+    !     - Entire batch string must be < 80 chars (SocketReceive limit).
+    !       For large batches (>~4 commands), Python should split into
+    !       multiple sends, each acknowledged with OK before the next.
+    ! ═══════════════════════════════════════════════════════════════════════════
+
+    ! ── Tool ──────────────────────────────────────────────────────────────────
+    LOCAL PERS tooldata gripper := [TRUE,[[0,0,117.85],[0.966,0,0,0.259]],[0.59,[0.15,0.01,57.98],[1,0,0,0],0,0,0]];
+
+    ! ── Payload while gripping (adjust mass/CoG for your actual objects) ──────
+    LOCAL PERS loaddata gripPayload := [0.5,[0,0,30],[1,0,0,0],0,0,0];
+
+    ! ── Home pose ─────────────────────────────────────────────────────────────
+    ! HOME_OBS: the only position where the camera has full workspace view.
+    ! The robot MUST return here after every batch so perception can scan.
+    LOCAL CONST robtarget HomePose := [[-417.51,304.76,527.54],[0.04416,-0.99506,0.05359,0.07092],[1,-1,-1,0],[9E+09,9E+09,9E+09,9E+09,9E+09,9E+09]];
+
+    ! ── Shared zone ───────────────────────────────────────────────────────────
+    LOCAL CONST robtarget GP_SCREWDRIVER_S := [
+        [-468.82,12.57,80.00],[0.02849,-0.9915,-0.02919,0.00522],
+        [1,-1,-1,0],[9E9,9E9,9E9,9E9,9E9,9E9]];
+    LOCAL CONST robtarget GP_S1 := [
+        [-610.73,46.45,81.00],[0.03935,0.99888,0.02607,-0.00236],
+        [1,-1,-1,0],[9E9,9E9,9E9,9E9,9E9,9E9]];
+    LOCAL CONST robtarget GP_S2 := [
+        [-464.26,80.54,81.00],[0.01065,0.69835,0.71557,0.01266],
+        [1,-1,-1,0],[9E9,9E9,9E9,9E9,9E9,9E9]];
+    LOCAL CONST robtarget GP_S3 := [
+        [-465.76,181.90,81.00],[0.01065,0.69835,0.71557,0.01266],
+        [1,-1,-1,0],[9E9,9E9,9E9,9E9,9E9,9E9]];
+    LOCAL CONST robtarget CTR_GENERAL_S1 := [
+        [-560.56,191.91,113.33],[0.01758,0.70034,0.71357,-0.00649],
+        [1,-1,-1,0],[9E9,9E9,9E9,9E9,9E9,9E9]];
+    LOCAL CONST robtarget CTR_SCREW_S := [
+        [-321.08,96.37,111.67],[0.01525,0.9905,0.01756,0.03673],
+        [1,-1,-1,0],[9E9,9E9,9E9,9E9,9E9,9E9]];
+    LOCAL CONST robtarget CTR_GENERAL_S2 := [
+        [-327.58,224.05,109.44],[0.01541,0.99905,0.01776,0.03698],
+        [1,-1,-1,0],[9E9,9E9,9E9,9E9,9E9,9E9]];
+
+    ! ── Remote zone ───────────────────────────────────────────────────────────
+    LOCAL CONST robtarget GP_SCREWDRIVER_R := [
+        [-506.03,268.25,80.00],[0.02849,-0.9915,-0.02919,0.00522],
+        [1,-1,-1,0],[9E9,9E9,9E9,9E9,9E9,9E9]];
+    LOCAL CONST robtarget GP_R1 := [
+        [-615.60,472.92,81.00],[0.02849,-0.9915,-0.02919,0.00522],
+        [1,-1,-1,0],[9E9,9E9,9E9,9E9,9E9,9E9]];
+    LOCAL CONST robtarget GP_R2 := [
+        [-482.36,341.90,81.00],[0.01065,0.69835,0.71557,0.01266],
+        [1,-1,-1,0],[9E9,9E9,9E9,9E9,9E9,9E9]];
+    LOCAL CONST robtarget GP_R3 := [
+        [-484.20,424.75,81.00],[0.01065,0.69835,0.71557,0.01266],
+        [1,-1,-1,0],[9E9,9E9,9E9,9E9,9E9,9E9]];
+    LOCAL CONST robtarget GP_R4 := [
+        [-486.27,513.08,81.00],[0.00241,-0.71203,-0.70213,0.00456],
+        [1,-1,-1,0],[9E9,9E9,9E9,9E9,9E9,9E9]];
+    LOCAL CONST robtarget CTR_GENERAL_R1 := [
+        [-566.25,360.40,115.33],[0.01065,0.69835,0.71557,0.01266],
+        [1,-1,-1,0],[9E9,9E9,9E9,9E9,9E9,9E9]];
+    LOCAL CONST robtarget CTR_SCREW_R := [
+        [-383.39,322.12,114.33],[0.01065,0.69835,0.71557,0.01266],
+        [1,-1,-1,0],[9E9,9E9,9E9,9E9,9E9,9E9]];
+    LOCAL CONST robtarget CTR_GENERAL_R2 := [
+        [-381.22,488.14,114.67],[0.01065,0.69835,0.71557,0.01266],
+        [1,-1,-1,0],[9E9,9E9,9E9,9E9,9E9,9E9]];
+
+    ! ── Motion parameters ─────────────────────────────────────────────────────
+    LOCAL CONST num PRE_GRASP_Z_OFFSET := 80;
+    LOCAL CONST num SOCKET_TIMEOUT := 120;
+
+    ! ── Module-level variables ────────────────────────────────────────────────
+    VAR socketdev server_socket;
+    VAR socketdev client_socket;
+    VAR string    recv_buffer;
+    VAR clock     cycle_clk;
+
+    ! ══════════════════════════════════════════════════════════════════════════
+    ! STRING UTILITIES
+    ! ══════════════════════════════════════════════════════════════════════════
+    ! Built from StrFind (search for char) + StrPart (substring extraction),
+    ! which ARE standard RAPID functions in all RW versions.
+    LOCAL PROC SplitStr(string source, string delim,
+                        INOUT string result{*}, INOUT num count)
+        VAR num pos := 1;
+        VAR num found;
+        VAR num srcLen;
+
+        count  := 0;
+        srcLen := StrLen(source);
+
+        IF srcLen < 1 THEN
+            RETURN;
+        ENDIF
+
+        WHILE pos <= srcLen DO
+            ! StrFind returns pos > srcLen when char is not found
+            found := StrFind(source, pos, delim);
+
+            count := count + 1;
+            IF found > srcLen THEN
+                ! Last token — take everything from pos to end
+                result{count} := StrPart(source, pos, srcLen - pos + 1);
+                RETURN;
+            ELSEIF found = pos THEN
+                ! Empty token (two consecutive delimiters)
+                result{count} := "";
+            ELSE
+                result{count} := StrPart(source, pos, found - pos);
+            ENDIF
+            pos := found + 1;
+        ENDWHILE
+    ENDPROC
+
+    LOCAL FUNC string TrimRight(string source)
+        VAR num len;
+        VAR string ch;
+        len := StrLen(source);
+
+        WHILE len > 0 DO
+            ch := StrPart(source, len, 1);
+            ! STR_WHITE covers space and tab; add \0D (CR) and \0A (LF) explicitly
+            ! because RAPID's STR_WHITE does not include newline characters.
+            IF StrMemb(source, len, STR_WHITE) OR ch = "\0A" OR ch = "\0D" THEN
+                len := len - 1;
+            ELSE
+                RETURN StrPart(source, 1, len);
+            ENDIF
+        ENDWHILE
+
+        RETURN "";
+    ENDFUNC
+
+    ! ══════════════════════════════════════════════════════════════════════════
+    ! GP NAME → ROBTARGET RESOLVER
+    ! ══════════════════════════════════════════════════════════════════════════
+    LOCAL FUNC bool ResolveGP(string gpName, INOUT robtarget target)
+        ! ── Shared zone ──
+        IF gpName = "GP_SCREWDRIVER_S" THEN
+            target := GP_SCREWDRIVER_S;
+        ELSEIF gpName = "GP_S1" THEN
+            target := GP_S1;
+        ELSEIF gpName = "GP_S2" THEN
+            target := GP_S2;
+        ELSEIF gpName = "GP_S3" THEN
+            target := GP_S3;
+        ELSEIF gpName = "CTR_GENERAL_S1" THEN
+            target := CTR_GENERAL_S1;
+        ELSEIF gpName = "CTR_SCREW_S" THEN
+            target := CTR_SCREW_S;
+        ELSEIF gpName = "CTR_GENERAL_S2" THEN
+            target := CTR_GENERAL_S2;
+            
+        ! ── Remote zone ──
+        ELSEIF gpName = "GP_SCREWDRIVER_R" THEN
+            target := GP_SCREWDRIVER_R;
+        ELSEIF gpName = "GP_R1" THEN
+            target := GP_R1;
+        ELSEIF gpName = "GP_R2" THEN
+            target := GP_R2;
+        ELSEIF gpName = "GP_R3" THEN
+            target := GP_R3;
+        ELSEIF gpName = "GP_R4" THEN
+            target := GP_R4;
+        ELSEIF gpName = "CTR_GENERAL_R1" THEN
+            target := CTR_GENERAL_R1;
+        ELSEIF gpName = "CTR_SCREW_R" THEN
+            target := CTR_SCREW_R;
+        ELSEIF gpName = "CTR_GENERAL_R2" THEN
+            target := CTR_GENERAL_R2;
+        ELSE
+            RETURN FALSE;
+        ENDIF
+        RETURN TRUE;
+    ENDFUNC
+
+    ! ══════════════════════════════════════════════════════════════════════════
+    ! GRIPPER CONTROL
+    ! ══════════════════════════════════════════════════════════════════════════
+    LOCAL PROC GripClose()
+        IF RobOS() THEN
+            ! Real robot: call actual SCHUNK instruction
+            EGP_Close;
+            ! Uncomment the line above when running on the real robot
+            ! with the SCHUNK EGP add-in installed.
+            TPWrite "Gripper CLOSE (real robot - stub active, uncomment EGP_Close)";
+        ELSE
+            ! Simulation: log only, no hardware call
+            TPWrite "Gripper CLOSE (simulated)";
+            WaitTime 0.3;
+        ENDIF
+        GripLoad gripPayload;
+    ENDPROC
+
+    LOCAL PROC GripOpen()
+        IF RobOS() THEN
+            ! Real robot: call actual SCHUNK instruction
+            EGP_Open;
+            ! Uncomment the line above when running on the real robot
+            ! with the SCHUNK EGP add-in installed.
+            TPWrite "Gripper OPEN (real robot - stub active, uncomment EGP_Open)";
+        ELSE
+            ! Simulation: log only, no hardware call
+            TPWrite "Gripper OPEN (simulated)";
+            WaitTime 0.3;
+        ENDIF
+        GripLoad load0;
+    ENDPROC
+
+    ! ══════════════════════════════════════════════════════════════════════════
+    ! PICK-AND-PLACE MOTION CYCLE
+    ! ══════════════════════════════════════════════════════════════════════════
+    ! z_offset: extra mm added to the pick Z so taller objects (e.g. float_bowl,
+    ! diaphragm) are grasped at the correct height rather than at the nominal
+    ! table-level GP Z.  Pass 0 for standard flat objects.
+    PROC ExecutePickPlace(string pick_id, string place_id, num z_offset)
+        VAR robtarget pick_pt;
+        VAR robtarget place_pt;
+        VAR bool ok;
+
+        ok := ResolveGP(pick_id, pick_pt);
+        IF NOT ok THEN
+            TPWrite "ERROR: unknown pick GP [" + pick_id + "]";
+            SocketSend client_socket \Str:="ERROR;unknown GP:" + pick_id + "\0A";
+            RETURN;
+        ENDIF
+        ok := ResolveGP(place_id, place_pt);
+        IF NOT ok THEN
+            TPWrite "ERROR: unknown place GP [" + place_id + "]";
+            SocketSend client_socket \Str:="ERROR;unknown GP:" + place_id + "\0A";
+            RETURN;
+        ENDIF
+
+        ! ── PICK ──────────────────────────────────────────────────────────────
+        ! Approach from above the (possibly elevated) grasp point.
+        MoveJ Offs(pick_pt, 0, 0, PRE_GRASP_Z_OFFSET + z_offset), v200, z10, gripper;
+        ! Descend to the object-specific grasp height.
+        MoveL Offs(pick_pt, 0, 0, z_offset), v50, fine, gripper;
+        WaitRob \InPos;
+        GripClose;
+
+        ! ── TRANSFER ──────────────────────────────────────────────────────────
+        MoveL Offs(pick_pt, 0, 0, PRE_GRASP_Z_OFFSET + z_offset), v80, z10, gripper;
+        MoveJ Offs(place_pt, 0, 0, PRE_GRASP_Z_OFFSET + z_offset), v200, z10, gripper;
+
+        ! ── PLACE ─────────────────────────────────────────────────────────────
+        MoveL Offs(place_pt, 0, 0, z_offset), v50, fine, gripper;
+        WaitRob \InPos;
+        GripOpen;
+
+        MoveL Offs(place_pt, 0, 0, PRE_GRASP_Z_OFFSET + z_offset), v80, z10, gripper;
+
+    ERROR
+        ! ClearPath and StorePath both require the Path Recovery option (not installed).
+        ! StopMove alone is sufficient to halt motion on ERR_COLL_STOP.
+        IF ERRNO = ERR_COLL_STOP THEN
+            StopMove;
+            TPWrite "ERROR: collision during " + pick_id + " -> " + place_id;
+            GripOpen;
+            RAISE;
+        ELSEIF ERRNO = ERR_ROBLIMIT THEN
+            TPWrite "ERROR: position out of reach for " + pick_id + " or " + place_id;
+            RAISE;
+        ELSE
+            TPWrite "ERROR: motion error " + ValToStr(ERRNO)
+                    + " during " + pick_id + " -> " + place_id;
+            RAISE;
+        ENDIF
+    ENDPROC
+
+    ! ══════════════════════════════════════════════════════════════════════════
+    ! BATCH EXECUTOR
+    ! ══════════════════════════════════════════════════════════════════════════
+    PROC ExecuteBatch(string batch_str)
+        VAR string commands{20};
+        VAR string fields{3};
+        VAR num    n_commands;
+        VAR num    n_parts;
+        VAR num    i;
+        VAR num    elapsed;
+        VAR num    z_off;
+        VAR bool   ok;
+
+        ClkReset cycle_clk;
+        ClkStart cycle_clk;
+
+        SplitStr batch_str, "|", commands, n_commands;
+
+        IF n_commands < 1 THEN
+            SocketSend client_socket \Str:="ERROR;empty batch\0A";
+            RETURN;
+        ENDIF
+
+        TPWrite CDate() + " " + CTime() + " — batch of "
+                + ValToStr(n_commands);
+
+        FOR i FROM 1 TO n_commands DO
+            SplitStr commands{i}, ",", fields, n_parts;
+
+            IF n_parts >= 2 THEN
+                ! Third field is the pick Z offset in mm (default 0 if absent).
+                IF n_parts >= 3 THEN
+                    ok := StrToVal(fields{3}, z_off);
+                ELSE
+                    z_off := 0;
+                ENDIF
+                TPWrite "  [" + ValToStr(i) + "/" + ValToStr(n_commands)
+                        + "] " + fields{1} + " -> " + fields{2}
+                        + " (z_off=" + ValToStr(z_off) + ")";
+                ExecutePickPlace fields{1}, fields{2}, z_off;
+            ELSEIF commands{i} <> "" THEN
+                TPWrite "  WARNING: bad token [" + ValToStr(i) + "] "
+                        + commands{i};
+            ENDIF
+        ENDFOR
+
+        ! Single return to HomePose after entire batch
+        MoveJ HomePose, v200, z50, gripper;
+        WaitRob \InPos;
+
+        ClkStop cycle_clk;
+        elapsed := ClkRead(cycle_clk);
+        TPWrite "Batch done in " + ValToStr(elapsed) + " s";
+
+        SocketSend client_socket \Str:="OK\0A";
+
+    ERROR
+        TPWrite "Batch aborted due to error " + ValToStr(ERRNO);
+        ! Attempt safe return home before reporting error
+        MoveJ HomePose, v200, z50, gripper;
+        WaitRob \InPos;
+        ClkStop cycle_clk;
+        SocketSend client_socket \Str:="ERROR;motion error " + ValToStr(ERRNO) + "\0A";
+    ENDPROC
+
+    ! ══════════════════════════════════════════════════════════════════════════
+    ! SAFETY CHECKLIST — read and verify before running on real robot [I4]
+    ! ──────────────────────────────────────────────────────────────────────────
+    ! [ ] Robot is at or near HomePose before starting the program.
+    ! [ ] FlexPendant speed override is ≤ 50% for first test run.
+    ! [ ] All GP robtargets verified by jogging — no collisions.
+    ! [ ] Emergency stop within arm's reach of the operator.
+    ! [ ] Gripper tool (TCP, mass, CoG) matches physical end-effector.
+    ! [ ] gripPayload loaddata matches heaviest handled object.
+    ! [ ] Network firewall allows TCP on port 1025.
+    ! [ ] Python client sends \n-terminated ASCII strings (no null bytes).
+    ! [ ] PRE_GRASP_Z_OFFSET (80 mm) clears tallest object + gripper.
+    ! [ ] SCHUNK EGP-C add-in is installed (or SetDO lines uncommented).
+    ! [ ] World zones reviewed if HRC workspace has forbidden regions.
+    ! ══════════════════════════════════════════════════════════════════════════
+
+    ! ── Session handler: processes commands until DONE or disconnect ──────────
+    ! Runs inside the per-connection loop in main(). A clean RETURN ends only
+    ! the session; main() closes the client socket and loops back to Accept.
+LOCAL PROC RunSession()
+    WHILE TRUE DO
+        SocketReceive client_socket \Str:=recv_buffer \Time:=SOCKET_TIMEOUT;
+        recv_buffer := TrimRight(recv_buffer);
+
+        IF recv_buffer = "DONE" THEN
+            SocketSend client_socket \Str:="BYE\0A";
+            RETURN;   ! end session — main() closes client socket
+
+        ELSEIF recv_buffer = "HOME" THEN
+            MoveJ HomePose, v200, z50, gripper;
+            WaitRob \InPos;
+            SocketSend client_socket \Str:="OK\0A";
+
+        ELSE
+            ExecuteBatch recv_buffer;
+        ENDIF
+    ENDWHILE
+
+ERROR
+    ! Session-level error: log, recover if needed, then return so main()
+    ! can close the client socket and accept the next connection.
+    IF ERRNO = ERR_SOCK_TIMEOUT THEN
+        TPWrite "RAPID: session timeout — Python disconnected";
+        RETURN;
+    ELSEIF ERRNO = ERR_SOCK_CLOSED THEN
+        TPWrite "RAPID: session closed by Python";
+        RETURN;
+    ELSE
+        TPWrite "RAPID: session error " + ValToStr(ERRNO);
+        MoveJ HomePose, v200, z50, gripper;
+        WaitRob \InPos;
+        RETURN;
+    ENDIF
+    ! Implicit RETURN — session ends, main() handles cleanup
+ENDPROC
+
+    ! ── Main: bind once, accept sessions in a loop ────────────────────────────
+    ! The server socket is created and bound ONCE at startup and never closed,
+    ! so there is no port TIME_WAIT issue between sessions and no need to run
+    ! the RAPID task in Cycle mode.
+LOCAL PROC main()
+    VAR num speed_pct;
+
+    ! ── Configuration monitoring ────────────────────────────────────
+    ConfJ \Off;
+    ConfL \Off;
+
+    speed_pct := CSpeedOverride();
+    TPWrite "RAPID: speed override = " + ValToStr(speed_pct) + "%";
+    IF speed_pct < 25 THEN
+        TPWrite "WARNING: speed override below 25%"
+                + " — raise FlexPendant slider for normal operation";
+    ENDIF
+
+    ! ── Bind server socket ONCE ───────────────────────────────────────
+    ! Simulation: "127.0.0.1" port 5000
+    ! Real robot:  "0.0.0.0"  port 1025
+    SocketCreate server_socket;
+    SocketBind   server_socket, "192.168.125.1", 1025;
+    SocketListen server_socket;
+    TPWrite "RAPID: server ready on port 5000";
+
+    ! ── Accept one Python session at a time ───────────────────────────
+    WHILE TRUE DO
+        TPWrite "RAPID: waiting for Python...";
+        SocketAccept server_socket, client_socket \Time:=WAIT_MAX;
+        TPWrite "RAPID: Python connected — " + CDate() + " " + CTime();
+        SocketSend client_socket \Str:="READY\0A";
+
+        MoveJ HomePose, v200, z50, gripper;
+        WaitRob \InPos;
+        GripOpen;
+
+        RunSession;
+
+        SocketClose client_socket;
+        TPWrite "RAPID: session closed — " + CDate() + " " + CTime();
+    ENDWHILE
+
+ERROR
+    ! Fatal error (e.g. SocketBind failure). Log and shut down cleanly.
+    IF ERRNO = ERR_SOCK_TIMEOUT OR ERRNO = ERR_SOCK_CLOSED THEN
+        TPWrite "RAPID: accept error " + ValToStr(ERRNO);
+    ELSE
+        TPWrite "RAPID: fatal error " + ValToStr(ERRNO);
+        MoveJ HomePose, v200, z50, gripper;
+    ENDIF
+    SocketClose client_socket;
+    SocketClose server_socket;
+    TPWrite "RAPID: server shut down";
+ENDPROC
+
+ENDMODULE
