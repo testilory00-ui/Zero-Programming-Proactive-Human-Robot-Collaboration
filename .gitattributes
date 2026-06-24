@@ -1,0 +1,12 @@
+# Normalize line endings on checkin; let git manage them per-platform.
+* text=auto
+
+# Treat known binary assets as binary (never line-ending converted / diffed).
+*.pt        binary
+*.task      binary
+*.pdf       binary
+*.xlsx      binary
+*.MOV       binary
+*.mp4       binary
+*.bin       binary
+*.rsstn     binary

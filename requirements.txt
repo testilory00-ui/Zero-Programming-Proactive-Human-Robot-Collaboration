@@ -1,0 +1,22 @@
+# Core perception & vision
+opencv-python
+numpy
+pyrealsense2
+mediapipe
+ultralytics            # YOLOv8-seg (best_3.pt)
+
+# Local LLM inference (OpenVINO) — only needed for `python main.py --local-model`
+transformers
+optimum[openvino]      # provides optimum.intel.OVModelForCausalLM
+openvino
+
+# Cloud inference
+google-genai           # Gemini VLM  (import: google.genai)
+huggingface_hub        # Llama 4 Scout via HF Inference API
+
+# Experiment analysis (logs/analyze_results.py, logs/annotate_predictions.py)
+matplotlib
+pandas
+openpyxl               # pandas -> .xlsx export
+Pillow                 # annotate_predictions GUI (import: PIL)
+# tkinter is part of the Python standard library (no pip install)

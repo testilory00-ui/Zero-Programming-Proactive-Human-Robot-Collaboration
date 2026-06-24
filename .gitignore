@@ -1,0 +1,40 @@
+# ─── Python ────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# ─── Local LLM weights (OpenVINO export — not committed; see README) ─────────
+Qwen3_4B_INT8/
+*_INT4/
+*_INT8/
+model_cache/
+*.bin
+
+# ─── Large media / capture artefacts ─────────────────────────────────────────
+*.MOV
+*.mp4
+*.avi
+video_learning/
+logs/video/*.MOV
+logs/**/call_*_vlm.jpg
+logs/trial_*_frames/
+
+# ─── Generated analysis output ───────────────────────────────────────────────
+output/
+runs/
+
+# ─── Learning-phase crash-recovery scratch ───────────────────────────────────
+learn_procedure_checkpoint.json
+learn_frames/
+
+# ─── Legacy / scratch (kept locally, excluded from the published repo) ───────
+archive/
+
+# ─── Editor / tooling / OS ───────────────────────────────────────────────────
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
